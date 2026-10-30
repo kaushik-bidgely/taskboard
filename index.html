@@ -1,0 +1,1236 @@
+<title>Taskboard</title>
+<style>
+:root{
+  /* layout: horizontal columns (categories) of nested task cards, color as the primary signal */
+  --bg:#eef1f6; --surface:#ffffff; --surface-2:#f5f7fb; --border:#d9e0e9;
+  --text:#1b2430; --text-dim:#5b6676; --text-faint:#8793a3;
+  --accent:#3454d1; --accent-ink:#ffffff; --danger:#c22a2a;
+
+  --c-none:#9aa5b5;
+  --c-red-1:#c22a2a; --c-red-2:#dd5f4e; --c-red-3:#f0a898;
+  --c-green-1:#1f8a4c; --c-green-2:#4caf6b; --c-green-3:#9ed7ad;
+  --c-blue-1:#2660c4; --c-blue-2:#5588e0; --c-blue-3:#a9c6f2;
+
+  --cat-crimson:#d1435b; --cat-orange:#d1682f; --cat-gold:#c7a62e; --cat-teal:#2a9d8f;
+  --cat-blue:#3a6fd8; --cat-violet:#8457d6; --cat-pink:#c23f9e; --cat-slate:#6b7585;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme: dark;
+    --bg:#11151c; --surface:#171c25; --surface-2:#1e2430; --border:#2b3341;
+    --text:#e7ebf1; --text-dim:#99a3b3; --text-faint:#6b7589;
+    --accent:#6f8aff; --accent-ink:#0b0f16; --danger:#e2695c;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --bg:#11151c; --surface:#171c25; --surface-2:#1e2430; --border:#2b3341;
+  --text:#e7ebf1; --text-dim:#99a3b3; --text-faint:#6b7589;
+  --accent:#6f8aff; --accent-ink:#0b0f16; --danger:#e2695c;
+}
+
+*{ box-sizing:border-box; }
+html,body{ height:100%; }
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Source Sans 3", system-ui, sans-serif;
+  display:flex; flex-direction:column;
+  padding-left:max(16px, env(safe-area-inset-left,0px));
+  padding-right:max(16px, env(safe-area-inset-right,0px));
+}
+h1,h2,h3,.display{ font-family:"Sora", system-ui, sans-serif; }
+.mono{ font-family:"JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+button{ font:inherit; color:inherit; }
+input{ font:inherit; color:inherit; }
+
+/* ---------- topbar ---------- */
+.topbar{ padding-block:18px 14px; display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:10px; border-bottom:1px solid var(--border); }
+.topbar h1{ margin:0; font-size:1.5rem; font-weight:700; letter-spacing:-0.01em; }
+.topbar .sub{ margin-top:4px; color:var(--text-dim); font-size:0.86rem; }
+.topbar .stats{ display:flex; gap:14px; font-size:0.8rem; color:var(--text-dim); }
+.topbar .stats b{ color:var(--text); font-weight:600; }
+.topbar .stat-dot{ width:7px; height:7px; border-radius:50%; display:inline-block; margin-right:5px; vertical-align:1px; }
+.topbar-actions{ display:flex; align-items:center; gap:14px; }
+#category-add-area{ position:relative; }
+.add-cat-btn{ background:var(--accent); color:var(--accent-ink); border:none; border-radius:8px; padding:6px 14px; font-weight:700; font-size:0.8rem; cursor:pointer; white-space:nowrap; }
+.cat-add-pop{
+  position:absolute; top:34px; right:0; width:220px; z-index:30;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:10px; box-shadow:0 10px 30px rgba(0,0,0,.22); display:flex; flex-direction:column; gap:8px;
+}
+.cat-add-pop input[type=text]{ background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:6px 8px; width:100%; }
+
+/* ---------- board ---------- */
+.board-wrap{ flex:1; min-height:0; overflow-x:auto; overflow-y:hidden; padding-block:16px 10px; }
+.board{ display:flex; gap:14px; height:100%; min-height:420px; }
+.board-loading, .board-empty{ color:var(--text-dim); padding:40px 8px; font-size:0.92rem; }
+.board-wrap.list-mode{ overflow-x:hidden; overflow-y:auto; }
+.board-wrap.list-mode .board{ flex-direction:column; height:auto; min-height:0; }
+.board-wrap.list-mode .column{ flex:0 0 auto; width:100%; max-width:760px; max-height:none; }
+.board-wrap.list-mode .column-body{ overflow:visible; }
+
+/* ---------- suggestions ---------- */
+.suggest-banner{ margin:10px 0 0; }
+.suggest-toggle{
+  background:color-mix(in srgb, var(--accent) 12%, var(--surface)); border:1px solid var(--accent); color:var(--accent);
+  font-weight:700; font-size:0.82rem; border-radius:9px; padding:7px 12px; cursor:pointer;
+}
+.suggest-list{ margin-top:8px; display:flex; flex-direction:column; gap:8px; max-width:760px; }
+.suggest-item{ background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:8px 10px; }
+.suggest-main{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.suggest-title{ font-weight:600; font-size:0.86rem; }
+.suggest-cat{ font-size:0.7rem; color:var(--text-dim); background:var(--surface-2); border-radius:6px; padding:1px 7px; }
+.suggest-cat-missing{ color:var(--danger); }
+.suggest-desc{ font-size:0.78rem; color:var(--text-dim); margin-top:3px; }
+.suggest-actions{ display:flex; gap:6px; margin-top:6px; }
+
+.column{
+  flex:0 0 272px; width:272px; display:flex; flex-direction:column;
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  max-height:100%; overflow:hidden;
+}
+.column-head{
+  display:flex; align-items:center; gap:8px; padding:12px 12px 10px;
+  border-bottom:1px solid var(--border); border-top:4px solid var(--cat-color,var(--border));
+  flex:0 0 auto; cursor:grab;
+}
+.column.dragging{ opacity:.45; }
+.column.drop-cat-before{ box-shadow:inset 4px 0 0 var(--accent); }
+.column.drop-cat-after{ box-shadow:inset -4px 0 0 var(--accent); }
+.swatch-dot{
+  width:14px; height:14px; border-radius:50%; flex:0 0 auto; cursor:pointer;
+  border:2px solid var(--surface); box-shadow:0 0 0 1px var(--dot-color,var(--border));
+  background:var(--dot-color,var(--text-faint));
+}
+.column-name{ flex:1; min-width:0; font-weight:700; font-size:0.92rem; }
+.column-name input{ width:100%; background:var(--surface-2); border:1px solid var(--accent); border-radius:6px; padding:3px 6px; }
+.column-count{ font-size:0.72rem; color:var(--text-dim); background:var(--surface-2); border-radius:20px; padding:2px 8px; flex:0 0 auto; }
+.icon-btn{
+  background:none; border:none; cursor:pointer; color:var(--text-faint); padding:3px;
+  border-radius:6px; line-height:1; flex:0 0 auto;
+}
+.icon-btn:hover{ color:var(--text); background:var(--surface-2); }
+
+.column-body{ flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px; }
+.column-body.drop-column{ background:var(--surface-2); outline:2px dashed var(--accent); outline-offset:-4px; }
+.empty-hint{ color:var(--text-faint); font-size:0.8rem; padding:6px 2px 2px; }
+
+.add-row{ margin-top:2px; }
+.add-trigger{
+  background:none; border:1px dashed var(--border); color:var(--text-dim); width:100%;
+  text-align:left; padding:7px 9px; border-radius:9px; cursor:pointer; font-size:0.82rem;
+}
+.add-trigger:hover{ border-color:var(--accent); color:var(--accent); }
+.add-form{ display:flex; flex-direction:column; gap:6px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px; padding:8px; }
+.add-form input[type=text]{ background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:6px 8px; width:100%; }
+.add-form .row{ display:flex; gap:6px; align-items:center; }
+.add-form .actions{ display:flex; gap:6px; justify-content:flex-end; }
+
+.btn{ border:none; border-radius:7px; padding:5px 10px; font-size:0.78rem; cursor:pointer; }
+.btn-primary{ background:var(--accent); color:var(--accent-ink); font-weight:600; }
+.btn-ghost{ background:none; color:var(--text-dim); }
+.btn-ghost:hover{ color:var(--text); }
+.btn-danger{ background:var(--danger); color:#fff; font-weight:600; }
+
+/* swatch popover */
+.swatch-pop{ position:relative; }
+.swatch-menu{
+  display:none; position:absolute; z-index:20; top:20px; left:0;
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  padding:8px; box-shadow:0 8px 24px rgba(0,0,0,.18);
+  grid-template-columns:repeat(3,18px); gap:6px;
+}
+.swatch-menu.open{ display:grid; }
+.swatch-menu.wide{ grid-template-columns:repeat(4,18px); }
+.swatch-opt{ width:18px; height:18px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
+.swatch-opt:hover{ border-color:var(--text); }
+.swatch-opt.none{ background:var(--surface-2); border:1px dashed var(--text-faint); }
+
+/* ---------- task card ---------- */
+.task-card{
+  background:color-mix(in srgb, var(--task-accent, var(--c-none)) 10%, var(--surface));
+  border-left:3px solid var(--task-accent, var(--border));
+  border-radius:9px; padding:8px 9px 7px; cursor:grab;
+}
+.task-card.dragging{ opacity:.4; }
+.task-card.drop-before{ box-shadow: inset 0 3px 0 var(--accent); }
+.task-card.drop-after{ box-shadow: inset 0 -3px 0 var(--accent); }
+.task-card.drop-nest{ outline:2px solid var(--accent); outline-offset:-2px; }
+.task-card.is-done{ opacity:.72; }
+.task-card .top-row{ display:flex; align-items:flex-start; gap:6px; }
+.chk{
+  flex:0 0 auto; border:1.5px solid var(--text-faint); cursor:pointer; background:none; width:16px; height:16px;
+  border-radius:4px; margin-top:1px; display:flex; align-items:center; justify-content:center;
+  font-size:10px; line-height:1; color:transparent; padding:0;
+}
+.chk-ip.checked{ background:color-mix(in srgb, var(--accent) 22%, transparent); border-color:var(--accent); color:var(--accent); }
+.chk-done{ border-radius:50%; margin-right:1px; }
+.chk-done.checked{ background:var(--c-green-1); border-color:var(--c-green-1); color:#fff; }
+.chk.disabled{ opacity:.35; cursor:default; }
+.task-title{ flex:1; min-width:0; font-size:0.86rem; font-weight:600; line-height:1.3; word-break:break-word; cursor:text; }
+.task-title.done{ text-decoration:line-through; color:var(--text-dim); }
+.task-title input{ width:100%; background:var(--surface); border:1px solid var(--accent); border-radius:5px; padding:2px 5px; font:inherit; font-weight:600; }
+.timing-select{
+  flex:0 0 auto; font-size:0.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.02em;
+  border:1px solid var(--border); border-radius:6px; padding:2px 5px; background:var(--surface);
+  color:var(--text-dim); max-width:84px;
+}
+.timing-select[data-timing="now"]{ background:var(--c-red-1); border-color:var(--c-red-1); color:#fff; }
+.timing-select[data-timing="next"]{ background:var(--c-blue-1); border-color:var(--c-blue-1); color:#fff; }
+.timing-select[data-timing="later"]{ background:var(--text-faint); border-color:var(--text-faint); color:#fff; }
+.due-chip{
+  font-size:0.7rem; font-weight:700; color:var(--text-dim); border:1px solid var(--border); border-radius:6px;
+  padding:1px 6px; background:var(--surface); cursor:pointer; display:inline-flex; align-items:center; gap:3px;
+}
+.due-chip.overdue{ color:#fff; background:var(--danger); border-color:var(--danger); }
+.due-input{ font-size:0.74rem; border:1px solid var(--accent); border-radius:6px; padding:2px 5px; background:var(--surface); color:inherit; }
+
+/* ---------- updates log ---------- */
+.updates-panel{ margin:6px 0 0 38px; display:flex; flex-direction:column; gap:6px; }
+.update-add-row{ display:flex; gap:6px; }
+.update-add-row input{ flex:1; background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:4px 7px; font-size:0.78rem; }
+.btn-xs{ padding:3px 8px; font-size:0.72rem; flex:0 0 auto; }
+.update-list{ display:flex; flex-direction:column; gap:4px; max-height:140px; overflow-y:auto; }
+.update-item{ display:flex; gap:7px; font-size:0.76rem; color:var(--text-dim); line-height:1.3; }
+.update-time{ flex:0 0 auto; color:var(--text-faint); font-size:0.7rem; padding-top:1px; }
+.update-text{ flex:1; word-break:break-word; }
+.update-empty{ font-size:0.76rem; color:var(--text-faint); }
+.dup-badge{
+  font-size:0.68rem; font-weight:700; color:#fff; background:var(--danger);
+  border-radius:6px; padding:1px 6px; display:inline-flex; align-items:center; gap:3px;
+  cursor:help;
+}
+.jira-chip{
+  font-size:0.7rem; font-weight:700; color:var(--accent); text-decoration:none;
+  border:1px solid var(--border); border-radius:6px; padding:1px 6px; display:inline-flex;
+  align-items:center; gap:3px; background:var(--surface);
+}
+.jira-chip:hover{ border-color:var(--accent); text-decoration:underline; }
+.jira-edit{ display:inline-flex; gap:4px; align-items:center; }
+.jira-input{ font-size:0.74rem; border:1px solid var(--accent); border-radius:6px; padding:2px 6px; width:130px; background:var(--surface); }
+.task-desc{ margin:3px 0 0 38px; font-size:0.78rem; color:var(--text-dim); line-height:1.35; cursor:text; white-space:pre-wrap; }
+.desc-input{
+  margin:4px 0 0 38px; width:calc(100% - 38px); background:var(--surface); border:1px solid var(--accent);
+  border-radius:6px; padding:5px 7px; font:inherit; font-size:0.78rem; min-height:46px; resize:vertical;
+}
+.task-meta{ display:flex; align-items:center; gap:4px; margin-top:4px; padding-left:38px; flex-wrap:wrap; }
+.meta-link{ background:none; border:none; color:var(--text-faint); font-size:0.72rem; cursor:pointer; padding:2px 4px; border-radius:5px; }
+.meta-link:hover{ color:var(--text); background:var(--surface-2); }
+.meta-spacer{ flex:1; }
+.confirm-row{ display:flex; align-items:center; gap:6px; margin-top:4px; padding-left:38px; font-size:0.74rem; color:var(--danger); }
+
+.children{ margin-top:7px; margin-left:16px; padding-left:9px; border-left:2px solid var(--border); display:flex; flex-direction:column; gap:6px; }
+
+.completed-toggle{
+  margin-top:2px; background:none; border:none; color:var(--text-dim); font-size:0.78rem;
+  cursor:pointer; text-align:left; padding:5px 2px;
+}
+.completed-toggle:hover{ color:var(--text); }
+.completed-list{ display:flex; flex-direction:column; gap:6px; padding-top:2px; }
+
+/* add-category placeholder column */
+.add-column{
+  flex:0 0 220px; width:220px; border:1.5px dashed var(--border); border-radius:14px;
+  display:flex; align-items:flex-start; padding:12px;
+}
+.add-column-trigger{
+  background:none; border:none; color:var(--text-dim); cursor:pointer; font-size:0.88rem;
+  font-weight:600; width:100%; text-align:left;
+}
+.add-column-trigger:hover{ color:var(--accent); }
+.cat-swatch-row{ display:flex; gap:6px; flex-wrap:wrap; }
+.cat-swatch{ width:20px; height:20px; border-radius:50%; cursor:pointer; border:2px solid transparent; }
+.cat-swatch.selected{ border-color:var(--text); }
+
+@media (max-width:480px){
+  .column, .add-column{ flex-basis:78vw; width:78vw; }
+}
+
+/* ---------- auth gate ---------- */
+.auth-gate{
+  position:fixed; inset:0; background:var(--bg); display:flex; align-items:center; justify-content:center; z-index:100;
+}
+.auth-box{ text-align:center; padding:32px; max-width:340px; }
+.auth-box h1{ margin:0 0 8px; }
+.auth-box p{ color:var(--text-dim); margin:0 0 18px; font-size:0.9rem; }
+.auth-box .btn{ padding:9px 18px; font-size:0.9rem; }
+.auth-error{ color:var(--danger); margin-top:14px; font-size:0.82rem; min-height:1em; }
+#app{ display:none; flex-direction:column; flex:1; min-height:0; }
+#app.visible{ display:flex; }
+.user-chip{ font-size:0.76rem; color:var(--text-dim); white-space:nowrap; }
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+  // --- Fill these in from Firebase console > Project settings > General > Your apps > Web app ---
+  var firebaseConfig = {
+    apiKey: "REPLACE_ME",
+    authDomain: "REPLACE_ME.firebaseapp.com",
+    projectId: "REPLACE_ME",
+    storageBucket: "REPLACE_ME.appspot.com",
+    messagingSenderId: "REPLACE_ME",
+    appId: "REPLACE_ME"
+  };
+  firebase.initializeApp(firebaseConfig);
+  var ALLOWED_EMAIL = "kaushik@bidgely.com";
+</script>
+
+<div class="auth-gate" id="auth-gate">
+  <div class="auth-box">
+    <h1>Taskboard</h1>
+    <p>Sign in with your Google account to view and edit your board.</p>
+    <button class="btn btn-primary" id="signin-btn">Sign in with Google</button>
+    <div class="auth-error" id="auth-error"></div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div>
+      <h1>Taskboard</h1>
+      <div class="sub">Categories as columns &middot; drag tasks to move, reorder or nest them &middot; click a dot to color-code</div>
+    </div>
+    <div class="topbar-actions">
+      <span class="user-chip mono" id="user-chip"></span>
+      <button class="icon-btn" id="signout-btn" title="Sign out">&#128682;</button>
+      <button class="icon-btn" id="view-toggle" data-action="toggle-view" title="Switch view">&#9638; List</button>
+      <button class="icon-btn" id="theme-toggle" data-action="toggle-theme" title="Theme: auto">&#127763;</button>
+      <div class="stats mono" id="stats"></div>
+      <div id="category-add-area"></div>
+    </div>
+  </div>
+
+  <div id="suggestions-area"></div>
+
+  <div class="board-wrap" id="board-wrap">
+    <div class="board" id="board">
+      <div class="board-loading">Loading your board&hellip;</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var categories = null; // null = not loaded yet
+  var tasks = null;
+  var comments = null;   // {id, taskId, text, createdAt}
+  var suggestions = null; // {id, title, categoryId, description, dueDate, timing, jiraUrl, createdAt}
+  var db = null;
+
+  // ---- transient UI-only state (not persisted) ----
+  var ui = {
+    openSwatch: null,       // {kind:'task'|'cat', id}
+    editing: null,          // {kind:'task'|'cat', id}
+    addingTaskIn: null,     // categoryId
+    addingSubIn: null,      // parentTaskId
+    addingCategory: false,
+    expandedChildren: new Set(),   // task ids whose children are shown
+    expandedCompleted: new Set(),  // category ids whose completed list is shown
+    expandedDesc: new Set(),       // task ids whose description is shown
+    expandedUpdates: new Set(),    // task ids whose updates log is shown
+    confirmDelete: null,    // {kind, id}
+    draftColor: null,       // color chosen in an open add-form, before submit
+    suggestionsOpen: false,
+    view: "board"           // "board" | "list" — set from storage right after definition below
+  };
+
+  var TASK_COLORS = ["none","red-1","red-2","red-3","green-1","green-2","green-3","blue-1","blue-2","blue-3"];
+  var CAT_COLORS = ["crimson","orange","gold","teal","blue","violet","pink","slate"];
+
+  function esc(s){
+    return String(s==null?"":s).replace(/[&<>"']/g, function(c){
+      return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c];
+    });
+  }
+  function uid(){ return "id" + Date.now().toString(36) + Math.random().toString(36).slice(2,8); }
+  function jiraKeyFromUrl(url){
+    var m = /\/browse\/([A-Za-z][A-Za-z0-9]*-\d+)/.exec(url || "");
+    return m ? m[1] : "Jira ↗";
+  }
+  function getTicketKey(task){
+    if(task.jiraUrl){
+      var fromUrl = jiraKeyFromUrl(task.jiraUrl);
+      if(fromUrl !== "Jira ↗") return fromUrl.toUpperCase();
+    }
+    var m = /^([A-Za-z][A-Za-z0-9]*-\d+)/.exec(task.title || "");
+    return m ? m[1].toUpperCase() : null;
+  }
+  var ticketKeyMap = {}; // normalized key -> [{id, title}]
+  function buildTicketKeyMap(){
+    ticketKeyMap = {};
+    (tasks||[]).forEach(function(t){
+      var k = getTicketKey(t);
+      if(!k) return;
+      (ticketKeyMap[k] = ticketKeyMap[k] || []).push({id:t.id, title:t.title});
+    });
+  }
+  function normalizeJiraInput(value){
+    var v = (value || "").trim();
+    if(!v) return null;
+    if(/^https?:\/\//i.test(v)) return v;
+    if(/^[A-Za-z][A-Za-z0-9]*-\d+$/.test(v)) return "https://bidgely.atlassian.net/browse/" + v.toUpperCase();
+    return v;
+  }
+  var THEME_ORDER = ["auto","light","dark"];
+  var THEME_ICON = { auto:"&#127763;", light:"&#9728;&#65039;", dark:"&#127769;" };
+  function currentTheme(){
+    try{ return localStorage.getItem("taskboard-theme") || "auto"; }catch(e){ return "auto"; }
+  }
+  function applyTheme(theme){
+    if(theme==="light") document.documentElement.setAttribute("data-theme","light");
+    else if(theme==="dark") document.documentElement.setAttribute("data-theme","dark");
+    else document.documentElement.removeAttribute("data-theme");
+  }
+  function setTheme(theme){
+    try{ localStorage.setItem("taskboard-theme", theme); }catch(e){}
+    applyTheme(theme);
+  }
+  function updateThemeButton(){
+    var btn = document.getElementById("theme-toggle");
+    if(!btn) return;
+    var t = currentTheme();
+    btn.innerHTML = THEME_ICON[t] || THEME_ICON.auto;
+    btn.title = "Theme: " + t + " (click to change)";
+  }
+
+  function currentView(){
+    try{ return localStorage.getItem("taskboard-view") || "board"; }catch(e){ return "board"; }
+  }
+  function setView(v){
+    try{ localStorage.setItem("taskboard-view", v); }catch(e){}
+    ui.view = v; render();
+  }
+  function updateViewButton(){
+    var btn = document.getElementById("view-toggle");
+    if(!btn) return;
+    btn.innerHTML = ui.view==="list" ? "&#9638; Board" : "&#9638; List";
+    btn.title = "Switch to " + (ui.view==="list" ? "board" : "list") + " view";
+  }
+  ui.view = currentView();
+
+  function todayStr(){
+    var d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+  }
+  function formatDueDate(ds){
+    var parts = (ds||"").split("-");
+    if(parts.length!==3) return ds||"";
+    var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    var d = new Date(Number(parts[0]), Number(parts[1])-1, Number(parts[2]));
+    return MONTHS[d.getMonth()] + " " + d.getDate();
+  }
+
+  function byOrder(a,b){ return (a.order||0)-(b.order||0); }
+  function nextOrder(list){ if(!list.length) return 0; return Math.max.apply(null, list.map(function(t){return t.order||0;})) + 10; }
+  function compareTasks(a,b){
+    var aHas = !!a.dueDate, bHas = !!b.dueDate;
+    if(aHas && bHas){ return a.dueDate===b.dueDate ? (a.order||0)-(b.order||0) : (a.dueDate<b.dueDate?-1:1); }
+    if(aHas!==bHas) return aHas ? -1 : 1;
+    return (a.order||0)-(b.order||0);
+  }
+
+  function children(id){ return (tasks||[]).filter(function(t){ return t.parentId===id; }).sort(compareTasks); }
+  function commentsFor(taskId){
+    return (comments||[]).filter(function(c){ return c.taskId===taskId; }).sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+  }
+  function formatUpdateTime(ts){
+    if(!ts) return "";
+    var d = new Date(ts);
+    return (d.getMonth()+1)+"/"+d.getDate();
+  }
+  function isDescendant(ancestorId, nodeId){
+    var cur = (tasks||[]).find(function(t){return t.id===nodeId;});
+    var guard = 0;
+    while(cur && cur.parentId && guard++ < 200){
+      if(cur.parentId===ancestorId) return true;
+      cur = (tasks||[]).find(function(t){return t.id===cur.parentId;});
+    }
+    return false;
+  }
+
+  // ---------------- rendering ----------------
+
+  function render(){
+    renderStats();
+    buildTicketKeyMap();
+    updateViewButton();
+    var boardWrap = document.getElementById("board-wrap");
+    if(boardWrap) boardWrap.classList.toggle("list-mode", ui.view==="list");
+    var addArea = document.getElementById("category-add-area");
+    if(addArea) addArea.innerHTML = renderCategoryAddArea();
+    var suggestArea = document.getElementById("suggestions-area");
+    if(suggestArea) suggestArea.innerHTML = renderSuggestionsArea();
+    var board = document.getElementById("board");
+    if(categories===null || tasks===null){
+      board.innerHTML = '<div class="board-loading">Loading your board&hellip;</div>';
+      return;
+    }
+    if(categories.length===0){
+      board.innerHTML = '<div class="board-empty">No categories yet — use the + Category button above to add one.</div>';
+      return;
+    }
+    board.innerHTML = categories.slice().sort(byOrder).map(renderColumn).join("");
+  }
+
+  function renderStats(){
+    var el = document.getElementById("stats");
+    if(!tasks){ el.innerHTML=""; return; }
+    var total = tasks.length;
+    var done = tasks.filter(function(t){return t.status==="done";}).length;
+    var inProg = tasks.filter(function(t){return t.status==="in_progress";}).length;
+    var weekAgo = Date.now() - 7*24*60*60*1000;
+    var doneThisWeek = tasks.filter(function(t){return t.status==="done" && t.completedAt && t.completedAt>weekAgo;}).length;
+    el.innerHTML =
+      '<span><span class="stat-dot" style="background:var(--accent)"></span>'+inProg+' in progress</span>'+
+      '<span><span class="stat-dot" style="background:var(--c-green-1)"></span>'+done+' done</span>'+
+      '<span>'+doneThisWeek+' completed this week</span>'+
+      '<span>'+total+' total</span>';
+  }
+
+  function renderColumn(cat){
+    var active = (tasks||[]).filter(function(t){ return t.categoryId===cat.id && !t.parentId && t.status!=="done"; }).sort(compareTasks);
+    var completed = (tasks||[]).filter(function(t){ return t.categoryId===cat.id && !t.parentId && t.status==="done"; }).sort(function(a,b){ return (b.completedAt||0)-(a.completedAt||0); });
+
+    var isEditingName = ui.editing && ui.editing.kind==="cat" && ui.editing.id===cat.id;
+    var nameHtml = isEditingName
+      ? '<input type="text" class="rename-input" data-kind="cat" data-id="'+cat.id+'" value="'+esc(cat.name)+'">'
+      : '<span class="name-text" data-kind="cat" data-id="'+cat.id+'">'+esc(cat.name)+'</span>';
+
+    var swatchOpen = ui.openSwatch && ui.openSwatch.kind==="cat" && ui.openSwatch.id===cat.id;
+
+    var body = "";
+    if(active.length===0 && completed.length===0 && ui.addingTaskIn!==cat.id){
+      body += '<div class="empty-hint">No tasks yet.</div>';
+    }
+    body += active.map(function(t){ return renderCard(t, false); }).join("");
+
+    body += '<div class="add-row">';
+    if(ui.addingTaskIn===cat.id){
+      body += renderAddForm({kind:"task", categoryId:cat.id, parentId:null});
+    } else {
+      body += '<button class="add-trigger" data-action="open-add-task" data-cat="'+cat.id+'">+ Add task</button>';
+    }
+    body += '</div>';
+
+    if(completed.length>0){
+      var open = ui.expandedCompleted.has(cat.id);
+      body += '<button class="completed-toggle" data-action="toggle-completed" data-cat="'+cat.id+'">'+(open?"&#9662;":"&#9656;")+' Completed ('+completed.length+')</button>';
+      if(open){
+        body += '<div class="completed-list">' + completed.map(function(t){ return renderCard(t, true); }).join("") + '</div>';
+      }
+    }
+
+    return (
+      '<section class="column">' +
+        '<div class="column-head" draggable="true" data-cat-id="'+cat.id+'" style="--cat-color:var(--cat-'+cat.color+')">' +
+          '<div class="swatch-pop">' +
+            '<span class="swatch-dot" style="--dot-color:var(--cat-'+cat.color+')" data-action="toggle-swatch" data-kind="cat" data-id="'+cat.id+'"></span>' +
+            '<div class="swatch-menu wide'+(swatchOpen?" open":"")+'">' +
+              CAT_COLORS.map(function(c){ return '<span class="swatch-opt" style="background:var(--cat-'+c+')" data-action="set-cat-color" data-id="'+cat.id+'" data-color="'+c+'"></span>'; }).join("") +
+            '</div>' +
+          '</div>' +
+          '<div class="column-name">'+nameHtml+'</div>' +
+          '<span class="column-count mono">'+active.length+'</span>' +
+          '<button class="icon-btn" data-action="delete-category" data-id="'+cat.id+'" title="Delete category">&#10005;</button>' +
+        '</div>' +
+        '<div class="column-body" data-column-body data-cat="'+cat.id+'">' + body + '</div>' +
+      '</section>'
+    );
+  }
+
+  function renderCard(task, inCompletedBranch){
+    var kids = children(task.id);
+    var isDone = task.status==="done";
+    var isEditing = ui.editing && ui.editing.kind==="task" && ui.editing.id===task.id;
+    var swatchOpen = ui.openSwatch && ui.openSwatch.kind==="task" && ui.openSwatch.id===task.id;
+    var confirming = ui.confirmDelete && ui.confirmDelete.kind==="task" && ui.confirmDelete.id===task.id;
+    var color = task.color || "none";
+
+    var titleHtml = isEditing
+      ? '<span class="task-title"><input type="text" class="rename-input" data-kind="task" data-id="'+task.id+'" value="'+esc(task.title)+'"></span>'
+      : '<span class="task-title'+(isDone?" done":"")+'" data-action="edit-title" data-id="'+task.id+'">'+esc(task.title)+'</span>';
+
+    var html = '<div class="task-card'+(isDone?" is-done":"")+'" draggable="true" data-task-id="'+task.id+'" data-category-id="'+task.categoryId+'" data-parent-id="'+(task.parentId||"")+'" style="--task-accent:var(--c-'+color+')">';
+    html += '<div class="top-row">';
+    var ipChecked = task.status==="in_progress";
+    html += '<button class="chk chk-ip'+(ipChecked?" checked":"")+(isDone?" disabled":"")+'"'+(isDone?"":' data-action="toggle-inprogress"')+' data-id="'+task.id+'" title="In progress">'+(ipChecked?"&#9679;":"")+'</button>';
+    html += '<button class="chk chk-done'+(isDone?" checked":"")+'" data-action="toggle-done" data-id="'+task.id+'" title="Done">'+(isDone?"&#10003;":"")+'</button>';
+    html += titleHtml;
+    html += '<div class="swatch-pop">';
+    html += '<span class="swatch-dot" style="--dot-color:var(--c-'+color+')" data-action="toggle-swatch" data-kind="task" data-id="'+task.id+'"></span>';
+    html += '<div class="swatch-menu'+(swatchOpen?" open":"")+'">';
+    html += TASK_COLORS.map(function(c){ return '<span class="swatch-opt'+(c==="none"?" none":"")+'" style="background:'+(c==="none"?"":"var(--c-"+c+")")+'" data-action="set-task-color" data-id="'+task.id+'" data-color="'+c+'"></span>'; }).join("");
+    html += '</div></div>';
+    var timing = task.timing || "";
+    html += '<select class="timing-select" data-timing="'+timing+'" data-action="set-timing" data-id="'+task.id+'" title="When should this happen?">'+
+      '<option value=""'+(timing===""?" selected":"")+'>&ndash;</option>'+
+      '<option value="now"'+(timing==="now"?" selected":"")+'>&#128293; Now</option>'+
+      '<option value="next"'+(timing==="next"?" selected":"")+'>&#8594; Next</option>'+
+      '<option value="later"'+(timing==="later"?" selected":"")+'>&#9201; Later</option>'+
+    '</select>';
+    html += '</div>'; // top-row
+
+    var isEditingDesc = ui.editing && ui.editing.kind==="task-desc" && ui.editing.id===task.id;
+    var descExpanded = ui.expandedDesc.has(task.id);
+    if(isEditingDesc){
+      html += '<textarea class="desc-input" data-id="'+task.id+'" placeholder="Add a short description&hellip;">'+esc(task.description||"")+'</textarea>';
+    } else if(task.description && descExpanded){
+      html += '<div class="task-desc" data-action="edit-desc" data-id="'+task.id+'">'+esc(task.description).replace(/\n/g,"<br>")+'</div>';
+    }
+
+    var isEditingJira = ui.editing && ui.editing.kind==="task-jira" && ui.editing.id===task.id;
+    var isEditingDue = ui.editing && ui.editing.kind==="task-due" && ui.editing.id===task.id;
+
+    if(confirming){
+      html += '<div class="confirm-row">Delete'+(kids.length?" task + "+kids.length+" subtask"+(kids.length>1?"s":""):"")+'? '+
+        '<button class="btn btn-danger" data-action="confirm-delete" data-id="'+task.id+'">Delete</button>'+
+        '<button class="btn btn-ghost" data-action="cancel-delete">Cancel</button></div>';
+    } else {
+      html += '<div class="task-meta">';
+      if(kids.length){
+        var ex = ui.expandedChildren.has(task.id);
+        html += '<button class="meta-link" data-action="toggle-children" data-id="'+task.id+'">'+(ex?"&#9662;":"&#9656;")+' '+kids.length+' sub</button>';
+      }
+      if(!isDone && !inCompletedBranch){
+        html += '<button class="meta-link" data-action="open-add-sub" data-id="'+task.id+'">+ sub</button>';
+      }
+      if(task.description && !isEditingDesc){
+        html += '<button class="meta-link" data-action="toggle-desc" data-id="'+task.id+'">'+(descExpanded?"&#9662; hide note":"&#9656; note")+'</button>';
+      } else if(!task.description && !isEditingDesc){
+        html += '<button class="meta-link" data-action="edit-desc" data-id="'+task.id+'">+ note</button>';
+      }
+      (function(){
+        var updateCount = commentsFor(task.id).length;
+        var updatesOpen = ui.expandedUpdates.has(task.id);
+        html += '<button class="meta-link" data-action="toggle-updates" data-id="'+task.id+'">'+(updatesOpen?"&#9662;":"&#128172;")+' '+(updateCount ? updateCount+' update'+(updateCount>1?"s":"") : "update")+'</button>';
+      })();
+      if(isEditingDue){
+        html += '<input type="date" class="due-input" id="due-input" data-id="'+task.id+'" value="'+esc(task.dueDate||"")+'">';
+      } else if(task.dueDate){
+        var overdue = !isDone && task.dueDate < todayStr();
+        html += '<button class="due-chip'+(overdue?" overdue":"")+'" data-action="edit-due" data-id="'+task.id+'" title="Due date">&#128197; '+formatDueDate(task.dueDate)+'</button>';
+      } else {
+        html += '<button class="meta-link" data-action="edit-due" data-id="'+task.id+'">+ due</button>';
+      }
+      if(isEditingJira){
+        html += '<span class="jira-edit"><input type="text" id="jira-input" class="jira-input" data-id="'+task.id+'" placeholder="PEREQ-1234 or URL" value="'+esc(task.jiraUrl||"")+'"></span>';
+      } else if(task.jiraUrl){
+        html += '<a class="jira-chip" href="'+esc(task.jiraUrl)+'" target="_blank" rel="noopener noreferrer" title="Open in Jira">&#128279; '+esc(jiraKeyFromUrl(task.jiraUrl))+'</a>';
+        html += '<button class="meta-link" data-action="edit-jira" data-id="'+task.id+'" title="Change Jira link">&#9998;</button>';
+      } else {
+        html += '<button class="meta-link" data-action="edit-jira" data-id="'+task.id+'">+ jira</button>';
+      }
+      (function(){
+        var key = getTicketKey(task);
+        var hits = key ? (ticketKeyMap[key] || []) : [];
+        if(key && hits.length > 1){
+          var others = hits.filter(function(h){ return h.id !== task.id; }).map(function(h){ return h.title; }).join(", ");
+          html += '<span class="dup-badge" title="' + esc(key + " is also on: " + others) + '">&#9888; duplicate</span>';
+        }
+      })();
+      html += '<span class="meta-spacer"></span>';
+      html += '<button class="meta-link" data-action="ask-delete" data-id="'+task.id+'">delete</button>';
+      html += '</div>';
+      if(ui.expandedUpdates.has(task.id)){ html += renderUpdatesPanel(task.id); }
+    }
+
+    var showChildren = kids.length>0 && ui.expandedChildren.has(task.id);
+    var addingSub = ui.addingSubIn===task.id;
+    if(showChildren || addingSub){
+      html += '<div class="children">';
+      if(showChildren){ html += kids.map(function(k){ return renderCard(k, inCompletedBranch); }).join(""); }
+      if(addingSub){ html += renderAddForm({kind:"task", categoryId:task.categoryId, parentId:task.id}); }
+      html += '</div>';
+    }
+
+    html += '</div>';
+    return html;
+  }
+
+  function renderUpdatesPanel(taskId){
+    var list = commentsFor(taskId);
+    var html = '<div class="updates-panel">';
+    html += '<div class="update-add-row">' +
+      '<input type="text" class="update-input" id="update-input-'+taskId+'" placeholder="Add a status update&hellip;">' +
+      '<button class="btn btn-primary btn-xs" data-action="submit-update" data-id="'+taskId+'">Post</button>' +
+    '</div>';
+    if(list.length){
+      html += '<div class="update-list">' + list.map(function(c){
+        return '<div class="update-item"><span class="update-time mono">'+formatUpdateTime(c.createdAt)+'</span><span class="update-text">'+esc(c.text)+'</span></div>';
+      }).join("") + '</div>';
+    } else {
+      html += '<div class="update-empty">No updates yet.</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderSuggestionsArea(){
+    var list = (suggestions||[]).slice().sort(function(a,b){ return (a.createdAt||0)-(b.createdAt||0); });
+    if(!list.length) return "";
+    var open = ui.suggestionsOpen;
+    var html = '<div class="suggest-banner">';
+    html += '<button class="suggest-toggle" data-action="toggle-suggestions">&#128161; '+list.length+' suggested task'+(list.length>1?"s":"")+' &mdash; Review '+(open?"&#9662;":"&#9656;")+'</button>';
+    if(open){
+      html += '<div class="suggest-list">' + list.map(function(s){
+        var cat = (categories||[]).find(function(c){ return c.id===s.categoryId; });
+        return (
+          '<div class="suggest-item">' +
+            '<div class="suggest-main"><span class="suggest-title">'+esc(s.title)+'</span>' +
+              (cat ? '<span class="suggest-cat">'+esc(cat.name)+'</span>' : '<span class="suggest-cat suggest-cat-missing">no category</span>') +
+            '</div>' +
+            (s.description ? '<div class="suggest-desc">'+esc(s.description)+'</div>' : '') +
+            '<div class="suggest-actions">' +
+              '<button class="btn btn-primary btn-xs" data-action="accept-suggestion" data-id="'+s.id+'"'+(cat?"":" disabled")+'>Add</button>' +
+              '<button class="btn btn-ghost btn-xs" data-action="dismiss-suggestion" data-id="'+s.id+'">Dismiss</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join("") + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderAddForm(ctx){
+    var color = ui.draftColor || "none";
+    var swatches = TASK_COLORS.map(function(c){
+      return '<span class="swatch-opt'+(c==="none"?" none":"")+(c===color?" selected":"")+'" style="background:'+(c==="none"?"":"var(--c-"+c+")")+(c===color?";border-color:var(--text)":"")+'" data-action="draft-color" data-color="'+c+'"></span>';
+    }).join("");
+    return (
+      '<div class="add-form">' +
+        '<input type="text" id="add-input" placeholder="Task title" autofocus>' +
+        '<div class="row">' + swatches + '</div>' +
+        '<div class="actions">' +
+          '<button class="btn btn-ghost" data-action="cancel-add">Cancel</button>' +
+          '<button class="btn btn-primary" data-action="submit-add" data-cat="'+esc(ctx.categoryId)+'" data-parent="'+esc(ctx.parentId||"")+'">Add</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }
+
+  function renderCategoryAddArea(){
+    if(ui.addingCategory){
+      var color = ui.draftColor || CAT_COLORS[0];
+      var swatches = CAT_COLORS.map(function(c){
+        return '<span class="cat-swatch'+(c===color?" selected":"")+'" style="background:var(--cat-'+c+')" data-action="draft-cat-color" data-color="'+c+'"></span>';
+      }).join("");
+      return (
+        '<div class="cat-add-pop">' +
+          '<input type="text" id="add-cat-input" placeholder="Category name" autofocus>' +
+          '<div class="cat-swatch-row">' + swatches + '</div>' +
+          '<div class="actions">' +
+            '<button class="btn btn-ghost" data-action="cancel-add-category">Cancel</button>' +
+            '<button class="btn btn-primary" data-action="submit-add-category">Add</button>' +
+          '</div>' +
+        '</div>'
+      );
+    }
+    return '<button class="add-cat-btn" data-action="open-add-category" title="New category">+ Category</button>';
+  }
+
+  // ---------------- writes ----------------
+
+  function createCategory(name, color){
+    if(!db || !name.trim()) return;
+    db.collection("categories").add({ name: name.trim(), color: color, order: nextOrder(categories||[]), createdAt: Date.now() });
+  }
+  function createTask(categoryId, parentId, title){
+    if(!db || !title.trim()) return;
+    var siblings = (tasks||[]).filter(function(t){ return t.categoryId===categoryId && (t.parentId||null)===(parentId||null); });
+    db.collection("tasks").add({
+      categoryId: categoryId, parentId: parentId||null, title: title.trim(),
+      status:"not_started", color: ui.draftColor && ui.draftColor!=="none" ? ui.draftColor : null,
+      order: nextOrder(siblings), createdAt: Date.now(), updatedAt: Date.now(), completedAt: null
+    });
+  }
+  function toggleInProgress(task){
+    var next = task.status==="in_progress" ? "not_started" : "in_progress";
+    db.doc("tasks/"+task.id).update({ status: next, updatedAt: Date.now() });
+  }
+  function toggleDone(task){
+    var next = task.status==="done" ? "not_started" : "done";
+    db.doc("tasks/"+task.id).update({ status: next, completedAt: next==="done" ? Date.now() : null, updatedAt: Date.now() });
+  }
+  function setTaskColor(id, color){
+    db.doc("tasks/"+id).update({ color: color==="none"?null:color, updatedAt:Date.now() });
+  }
+  function setCatColor(id, color){
+    db.doc("categories/"+id).update({ color: color });
+  }
+  function renameTask(id, title){
+    if(!title.trim()) return;
+    db.doc("tasks/"+id).update({ title:title.trim(), updatedAt:Date.now() });
+  }
+  function renameCategory(id, name){
+    if(!name.trim()) return;
+    db.doc("categories/"+id).update({ name:name.trim() });
+  }
+  function setTaskDescription(id, desc){
+    db.doc("tasks/"+id).update({ description: desc.trim() ? desc.trim() : null, updatedAt: Date.now() });
+  }
+  function setTaskTiming(id, timing){
+    db.doc("tasks/"+id).update({ timing: timing ? timing : null, updatedAt: Date.now() });
+  }
+  function setTaskJira(id, value){
+    db.doc("tasks/"+id).update({ jiraUrl: normalizeJiraInput(value), updatedAt: Date.now() });
+  }
+  function setTaskDue(id, value){
+    db.doc("tasks/"+id).update({ dueDate: value ? value : null, updatedAt: Date.now() });
+  }
+  function addSuggestedTask(s){
+    if(!db || !s.categoryId) return;
+    var siblings = (tasks||[]).filter(function(t){ return t.categoryId===s.categoryId && !t.parentId; });
+    db.collection("tasks").add({
+      categoryId: s.categoryId, parentId: null, title: s.title,
+      status:"not_started", color: null,
+      description: s.description || null, timing: s.timing || null,
+      dueDate: s.dueDate || null, jiraUrl: s.jiraUrl || null,
+      order: nextOrder(siblings), createdAt: Date.now(), updatedAt: Date.now(), completedAt: null
+    });
+    db.doc("suggestions/"+s.id).delete();
+  }
+  function dismissSuggestion(id){
+    db.doc("suggestions/"+id).delete();
+  }
+  function collectDescendantIds(id, acc){
+    acc = acc || [];
+    children(id).forEach(function(k){ acc.push(k.id); collectDescendantIds(k.id, acc); });
+    return acc;
+  }
+  function deleteTaskCascade(id){
+    var ids = collectDescendantIds(id).concat([id]);
+    ids.forEach(function(tid){
+      db.doc("tasks/"+tid).delete();
+      commentsFor(tid).forEach(function(c){ db.doc("comments/"+c.id).delete(); });
+    });
+  }
+  function deleteCategoryCascade(id){
+    (tasks||[]).filter(function(t){ return t.categoryId===id; }).forEach(function(t){
+      db.doc("tasks/"+t.id).delete();
+      commentsFor(t.id).forEach(function(c){ db.doc("comments/"+c.id).delete(); });
+    });
+    db.doc("categories/"+id).delete();
+  }
+  function moveTask(id, patch){
+    patch.updatedAt = Date.now();
+    db.doc("tasks/"+id).update(patch);
+  }
+  function renumber(list){
+    list.forEach(function(t,i){ db.doc("tasks/"+t.id).update({ order: i*10 }); });
+  }
+
+  // ---------------- event wiring (delegated) ----------------
+
+  document.addEventListener("click", function(e){
+    var el = e.target.closest("[data-action]");
+    if(el){
+      var action = el.getAttribute("data-action");
+      var id = el.getAttribute("data-id");
+      switch(action){
+        case "open-add-task": resetUiTransients(); ui.addingTaskIn = el.getAttribute("data-cat"); render(); focusAdd("add-input"); return;
+        case "open-add-sub": resetUiTransients(); ui.addingSubIn = id; render(); focusAdd("add-input"); return;
+        case "cancel-add": resetUiTransients(); render(); return;
+        case "submit-add": {
+          var catId = el.getAttribute("data-cat"), parentId = el.getAttribute("data-parent")||null;
+          var val = document.getElementById("add-input"); var text = val ? val.value : "";
+          createTask(catId, parentId, text); resetUiTransients(); render(); return;
+        }
+        case "open-add-category": resetUiTransients(); ui.addingCategory = true; render(); focusAdd("add-cat-input"); return;
+        case "cancel-add-category": resetUiTransients(); render(); return;
+        case "submit-add-category": {
+          var ci = document.getElementById("add-cat-input");
+          createCategory(ci?ci.value:"", ui.draftColor || CAT_COLORS[0]); resetUiTransients(); render(); return;
+        }
+        case "draft-color": ui.draftColor = el.getAttribute("data-color"); render(); focusAdd("add-input"); return;
+        case "draft-cat-color": ui.draftColor = el.getAttribute("data-color"); render(); focusAdd("add-cat-input"); return;
+        case "toggle-swatch": {
+          var kind = el.getAttribute("data-kind");
+          if(ui.openSwatch && ui.openSwatch.kind===kind && ui.openSwatch.id===id){ ui.openSwatch = null; }
+          else { ui.openSwatch = {kind:kind, id:id}; }
+          render(); return;
+        }
+        case "set-task-color": setTaskColor(id, el.getAttribute("data-color")); ui.openSwatch=null; render(); return;
+        case "set-cat-color": setCatColor(id, el.getAttribute("data-color")); ui.openSwatch=null; render(); return;
+        case "toggle-inprogress": { var tip=(tasks||[]).find(function(x){return x.id===id;}); if(tip && tip.status!=="done") toggleInProgress(tip); return; }
+        case "toggle-done": { var td=(tasks||[]).find(function(x){return x.id===id;}); if(td) toggleDone(td); return; }
+        case "toggle-children": {
+          if(ui.expandedChildren.has(id)) ui.expandedChildren.delete(id); else ui.expandedChildren.add(id);
+          render(); return;
+        }
+        case "toggle-theme": {
+          var curTheme = currentTheme();
+          var nextTheme = THEME_ORDER[(THEME_ORDER.indexOf(curTheme)+1) % THEME_ORDER.length];
+          setTheme(nextTheme); updateThemeButton(); return;
+        }
+        case "toggle-view": setView(ui.view==="list" ? "board" : "list"); return;
+        case "toggle-suggestions": ui.suggestionsOpen = !ui.suggestionsOpen; render(); return;
+        case "accept-suggestion": {
+          var sug = (suggestions||[]).find(function(x){return x.id===id;});
+          if(sug) addSuggestedTask(sug);
+          return;
+        }
+        case "dismiss-suggestion": dismissSuggestion(id); return;
+        case "toggle-desc": {
+          if(ui.expandedDesc.has(id)) ui.expandedDesc.delete(id); else ui.expandedDesc.add(id);
+          render(); return;
+        }
+        case "toggle-updates": {
+          if(ui.expandedUpdates.has(id)) ui.expandedUpdates.delete(id); else ui.expandedUpdates.add(id);
+          render(); return;
+        }
+        case "submit-update": {
+          var upInput = document.getElementById("update-input-"+id);
+          var upText = upInput ? upInput.value.trim() : "";
+          if(upText){ db.collection("comments").add({ taskId:id, text:upText, createdAt:Date.now() }); if(upInput) upInput.value = ""; }
+          return;
+        }
+        case "toggle-completed": {
+          var cid = el.getAttribute("data-cat");
+          if(ui.expandedCompleted.has(cid)) ui.expandedCompleted.delete(cid); else ui.expandedCompleted.add(cid);
+          render(); return;
+        }
+        case "edit-title": resetUiTransients(); ui.editing = {kind:"task", id:id}; render(); focusAdd("rename-input"); return;
+        case "edit-desc": resetUiTransients(); ui.editing = {kind:"task-desc", id:id}; render(); focusAdd("desc-input"); return;
+        case "edit-jira": resetUiTransients(); ui.editing = {kind:"task-jira", id:id}; render(); focusAdd("jira-input"); return;
+        case "edit-due": resetUiTransients(); ui.editing = {kind:"task-due", id:id}; render(); focusAdd("due-input"); return;
+        case "ask-delete": resetUiTransients(); ui.confirmDelete = {kind:"task", id:id}; render(); return;
+        case "cancel-delete": ui.confirmDelete = null; render(); return;
+        case "confirm-delete": deleteTaskCascade(id); ui.confirmDelete=null; render(); return;
+        case "delete-category": {
+          var cat = (categories||[]).find(function(c){return c.id===id;});
+          var names = (tasks||[]).filter(function(t){return t.categoryId===id;}).length;
+          if(ui.confirmDelete && ui.confirmDelete.kind==="cat" && ui.confirmDelete.id===id){
+            deleteCategoryCascade(id); ui.confirmDelete=null; render();
+          } else {
+            ui.confirmDelete = {kind:"cat", id:id};
+            el.textContent = "Confirm?";
+            setTimeout(function(){ if(ui.confirmDelete && ui.confirmDelete.id===id){ ui.confirmDelete=null; render(); } }, 3000);
+          }
+          return;
+        }
+      }
+      return;
+    }
+    var nameEl = e.target.closest(".name-text");
+    if(nameEl){
+      resetUiTransients();
+      ui.editing = {kind:nameEl.getAttribute("data-kind"), id:nameEl.getAttribute("data-id")};
+      render(); focusAdd("rename-input");
+      return;
+    }
+    // click-away closes open swatch menus
+    if(ui.openSwatch && !e.target.closest(".swatch-pop")){ ui.openSwatch = null; render(); }
+    if(ui.addingCategory && !e.target.closest("#category-add-area")){
+      ui.addingCategory = false; ui.draftColor = null; render();
+    }
+  });
+
+  document.addEventListener("keydown", function(e){
+    var target = e.target;
+    if(target.id==="add-input" || target.id==="add-cat-input"){
+      if(e.key==="Enter"){
+        var submitBtn = document.querySelector('[data-action="submit-add"], [data-action="submit-add-category"]');
+        if(submitBtn) submitBtn.click();
+      } else if(e.key==="Escape"){
+        resetUiTransients(); render();
+      }
+      return;
+    }
+    if(target.classList && target.classList.contains("rename-input")){
+      if(e.key==="Enter"){ target.blur(); }
+      else if(e.key==="Escape"){ ui.editing=null; render(); }
+    }
+    if(target.classList && target.classList.contains("desc-input")){
+      if(e.key==="Escape"){ ui.editing=null; render(); }
+    }
+    if(target.id==="jira-input"){
+      if(e.key==="Enter"){ target.blur(); }
+      else if(e.key==="Escape"){ ui.editing=null; render(); }
+    }
+    if(target.classList && target.classList.contains("update-input")){
+      if(e.key==="Enter"){
+        var postBtn = target.parentElement.querySelector('[data-action="submit-update"]');
+        if(postBtn) postBtn.click();
+      }
+    }
+  });
+
+  document.addEventListener("change", function(e){
+    var el = e.target.closest("select.timing-select");
+    if(el){ setTaskTiming(el.getAttribute("data-id"), el.value); }
+    var dueEl = e.target.closest("#due-input");
+    if(dueEl){ setTaskDue(dueEl.getAttribute("data-id"), dueEl.value); ui.editing = null; render(); }
+  });
+
+  document.addEventListener("focusout", function(e){
+    var t = e.target;
+    if(t.classList && t.classList.contains("rename-input")){
+      var kind = t.getAttribute("data-kind"), id = t.getAttribute("data-id");
+      if(kind==="task") renameTask(id, t.value); else renameCategory(id, t.value);
+      ui.editing = null; render();
+    }
+    if(t.classList && t.classList.contains("desc-input")){
+      var descId = t.getAttribute("data-id");
+      setTaskDescription(descId, t.value);
+      ui.editing = null;
+      if(t.value.trim()) ui.expandedDesc.add(descId); else ui.expandedDesc.delete(descId);
+      render();
+    }
+    if(t.id==="jira-input"){
+      setTaskJira(t.getAttribute("data-id"), t.value);
+      ui.editing = null; render();
+    }
+    if(t.id==="due-input"){
+      setTaskDue(t.getAttribute("data-id"), t.value);
+      ui.editing = null; render();
+    }
+  });
+
+  function resetUiTransients(){
+    ui.addingTaskIn = null; ui.addingSubIn = null; ui.addingCategory = false;
+    ui.editing = null; ui.draftColor = null;
+  }
+  function focusAdd(idOrClass){
+    requestAnimationFrame(function(){
+      var el = document.getElementById(idOrClass) || document.querySelector("."+idOrClass);
+      if(el){ el.focus(); if(el.select) el.select(); }
+    });
+  }
+
+  // ---------------- drag and drop ----------------
+
+  var draggedId = null;
+
+  // A task-card is draggable as a whole, but clicking a <span> swatch or a title
+  // inside it can be mistaken by the browser for the start of that drag (no native
+  // click-vs-drag arbitration exists for non-form elements). Suspend the card's own
+  // draggable flag while the mousedown originates on an interactive control, so the
+  // click always wins; restore it on mouseup so dragging the card still works.
+  var suspendedDragCard = null;
+  var suspendedDragHead = null;
+  var INTERACTIVE_SELECTOR = "button, input, textarea, select, a, .swatch-pop, .task-title, .add-form, .name-text";
+  document.addEventListener("mousedown", function(e){
+    var interactive = e.target.closest(INTERACTIVE_SELECTOR);
+    if(!interactive) return;
+    var card = e.target.closest(".task-card");
+    if(card){ card.setAttribute("draggable", "false"); suspendedDragCard = card; }
+    var head = e.target.closest(".column-head");
+    if(head){ head.setAttribute("draggable", "false"); suspendedDragHead = head; }
+  });
+  document.addEventListener("mouseup", function(){
+    if(suspendedDragCard){ suspendedDragCard.setAttribute("draggable", "true"); suspendedDragCard = null; }
+    if(suspendedDragHead){ suspendedDragHead.setAttribute("draggable", "true"); suspendedDragHead = null; }
+  });
+
+  var draggedCategoryId = null;
+
+  document.addEventListener("dragstart", function(e){
+    var card = e.target.closest(".task-card");
+    if(card){
+      draggedId = card.getAttribute("data-task-id");
+      e.dataTransfer.setData("text/plain", draggedId);
+      e.dataTransfer.effectAllowed = "move";
+      requestAnimationFrame(function(){ card.classList.add("dragging"); });
+      return;
+    }
+    var head = e.target.closest(".column-head");
+    if(head){
+      draggedCategoryId = head.getAttribute("data-cat-id");
+      e.dataTransfer.setData("text/plain", draggedCategoryId);
+      e.dataTransfer.effectAllowed = "move";
+      var col = head.closest(".column");
+      requestAnimationFrame(function(){ if(col) col.classList.add("dragging"); });
+    }
+  });
+
+  document.addEventListener("dragend", function(){
+    document.querySelectorAll(".dragging").forEach(function(el){ el.classList.remove("dragging"); });
+    clearDropIndicators();
+    draggedId = null;
+    draggedCategoryId = null;
+  });
+
+  function clearDropIndicators(){
+    document.querySelectorAll(".drop-before,.drop-after,.drop-nest").forEach(function(el){
+      el.classList.remove("drop-before","drop-after","drop-nest");
+    });
+    document.querySelectorAll(".drop-column").forEach(function(el){ el.classList.remove("drop-column"); });
+    document.querySelectorAll(".drop-cat-before,.drop-cat-after").forEach(function(el){
+      el.classList.remove("drop-cat-before","drop-cat-after");
+    });
+  }
+
+  document.addEventListener("dragover", function(e){
+    if(draggedCategoryId){
+      var col0 = e.target.closest(".column");
+      if(!col0) return;
+      e.preventDefault();
+      document.querySelectorAll(".drop-cat-before,.drop-cat-after").forEach(function(el){
+        el.classList.remove("drop-cat-before","drop-cat-after");
+      });
+      var head0 = col0.querySelector(".column-head");
+      var targetCatId0 = head0 ? head0.getAttribute("data-cat-id") : null;
+      if(!targetCatId0 || targetCatId0===draggedCategoryId) return;
+      var rect0 = col0.getBoundingClientRect();
+      var rel0 = (e.clientX - rect0.left) / rect0.width;
+      col0.classList.add(rel0 < 0.5 ? "drop-cat-before" : "drop-cat-after");
+      return;
+    }
+    if(!draggedId) return;
+    var card = e.target.closest(".task-card");
+    var colBody = e.target.closest("[data-column-body]");
+    if(!card && !colBody) return;
+    e.preventDefault();
+    clearDropIndicators();
+    if(card){
+      var targetId = card.getAttribute("data-task-id");
+      if(targetId===draggedId || isDescendant(draggedId, targetId)) return;
+      var rect = card.getBoundingClientRect();
+      var rel = (e.clientY - rect.top) / rect.height;
+      if(rel < 0.3) card.classList.add("drop-before");
+      else if(rel > 0.7) card.classList.add("drop-after");
+      else card.classList.add("drop-nest");
+    } else if(colBody){
+      colBody.classList.add("drop-column");
+    }
+  });
+
+  document.addEventListener("drop", function(e){
+    if(draggedCategoryId){
+      var col0 = e.target.closest(".column");
+      if(col0){
+        e.preventDefault();
+        var head0 = col0.querySelector(".column-head");
+        var targetCatId0 = head0 ? head0.getAttribute("data-cat-id") : null;
+        clearDropIndicators();
+        if(targetCatId0 && targetCatId0!==draggedCategoryId){
+          var rect0 = col0.getBoundingClientRect();
+          var rel0 = (e.clientX - rect0.left) / rect0.width;
+          var sibs0 = (categories||[]).filter(function(c){ return c.id!==draggedCategoryId; }).sort(byOrder);
+          var idx0 = sibs0.findIndex(function(c){ return c.id===targetCatId0; });
+          var insertAt0 = rel0 < 0.5 ? idx0 : idx0 + 1;
+          sibs0.splice(insertAt0, 0, {id:draggedCategoryId});
+          sibs0.forEach(function(c,i){ db.doc("categories/"+c.id).update({order:i*10}); });
+        }
+      }
+      draggedCategoryId = null;
+      return;
+    }
+    if(!draggedId) return;
+    var card = e.target.closest(".task-card");
+    var colBody = e.target.closest("[data-column-body]");
+    if(!card && !colBody) return;
+    e.preventDefault();
+    var id = draggedId;
+    clearDropIndicators();
+
+    if(card){
+      var targetId = card.getAttribute("data-task-id");
+      if(targetId===id || isDescendant(id, targetId)){ return; }
+      var targetTask = (tasks||[]).find(function(t){return t.id===targetId;});
+      if(!targetTask) return;
+      var rect = card.getBoundingClientRect();
+      var rel = (e.clientY - rect.top) / rect.height;
+
+      if(rel>=0.3 && rel<=0.7){
+        // nest under target
+        var sibs = children(targetTask.id).filter(function(t){return t.id!==id;});
+        moveTask(id, { categoryId: targetTask.categoryId, parentId: targetTask.id, order: nextOrder(sibs) });
+        ui.expandedChildren.add(targetTask.id);
+      } else {
+        var groupSibs = (tasks||[]).filter(function(t){
+          return t.categoryId===targetTask.categoryId && (t.parentId||null)===(targetTask.parentId||null) && t.id!==id;
+        }).sort(byOrder);
+        var idx = groupSibs.findIndex(function(t){return t.id===targetId;});
+        var insertAt = rel<0.3 ? idx : idx+1;
+        var draggedTask = (tasks||[]).find(function(t){return t.id===id;}) || {id:id};
+        var draggedCopy = Object.assign({}, draggedTask, { categoryId: targetTask.categoryId, parentId: targetTask.parentId||null });
+        groupSibs.splice(insertAt, 0, draggedCopy);
+        moveTask(id, { categoryId: targetTask.categoryId, parentId: targetTask.parentId||null, order: insertAt*10 });
+        renumber(groupSibs.filter(function(t){return t.id!==id;}));
+      }
+    } else if(colBody){
+      var catId = colBody.getAttribute("data-cat");
+      var topSibs = (tasks||[]).filter(function(t){ return t.categoryId===catId && !t.parentId && t.id!==id; });
+      moveTask(id, { categoryId: catId, parentId: null, order: nextOrder(topSibs) });
+    }
+    draggedId = null;
+  });
+
+  // ---------------- boot ----------------
+
+  function startData(){
+    if(db) return; // already listening
+    db = firebase.firestore();
+    db.collection("categories").onSnapshot(function(snap){
+      categories = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      render();
+    }, function(){ categories = categories || []; render(); });
+    db.collection("tasks").onSnapshot(function(snap){
+      tasks = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      render();
+    }, function(){ tasks = tasks || []; render(); });
+    db.collection("comments").onSnapshot(function(snap){
+      comments = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      render();
+    }, function(){ comments = comments || []; render(); });
+    db.collection("suggestions").onSnapshot(function(snap){
+      suggestions = snap.docs.map(function(d){ return Object.assign({id:d.id}, d.data()); });
+      render();
+    }, function(){ suggestions = suggestions || []; render(); });
+  }
+
+  function stopData(){
+    db = null;
+    categories = null; tasks = null; comments = null; suggestions = null;
+  }
+
+  function boot(){
+    applyTheme(currentTheme());
+    updateThemeButton();
+    render();
+
+    var gate = document.getElementById("auth-gate");
+    var app = document.getElementById("app");
+    var authError = document.getElementById("auth-error");
+
+    firebase.auth().onAuthStateChanged(function(user){
+      if(user && user.email === ALLOWED_EMAIL){
+        gate.style.display = "none";
+        app.classList.add("visible");
+        var chip = document.getElementById("user-chip");
+        if(chip) chip.textContent = user.email;
+        startData();
+        render();
+      } else {
+        stopData();
+        app.classList.remove("visible");
+        gate.style.display = "flex";
+        if(user && user.email !== ALLOWED_EMAIL){
+          authError.textContent = "This board is restricted to " + ALLOWED_EMAIL + " — signed in as " + user.email + ".";
+          firebase.auth().signOut();
+        } else {
+          authError.textContent = "";
+        }
+      }
+    });
+
+    document.getElementById("signin-btn").addEventListener("click", function(){
+      authError.textContent = "";
+      var provider = new firebase.auth.GoogleAuthProvider();
+      firebase.auth().signInWithPopup(provider).catch(function(err){
+        authError.textContent = err.message;
+      });
+    });
+    document.getElementById("signout-btn").addEventListener("click", function(){
+      firebase.auth().signOut();
+    });
+  }
+  boot();
+})();
+</script>
