@@ -2,7 +2,7 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner() {
-      return request.auth != null && request.auth.token.email == "kaushik@bidgely.com";
+      return request.auth != null && request.auth.token.email == "kaushik.battula3@gmail.com";
     }
     match /{document=**} {
       allow read, write: if isOwner();

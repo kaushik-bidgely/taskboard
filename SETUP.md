@@ -25,7 +25,7 @@ The code is done. These are the steps only you can do (they need your own Google
 
 ## 5. Publish the security rules
 1. Firestore Database → **Rules** tab.
-2. Replace the contents with what's in `firestore.rules` in this repo (it restricts all read/write to `kaushik@bidgely.com` only).
+2. Replace the contents with what's in `firestore.rules` in this repo (it restricts all read/write to `kaushik.battula3@gmail.com` only).
 3. Click **Publish**.
 
 ## 6. Push this repo to GitHub and enable Pages
@@ -41,7 +41,7 @@ Firebase blocks sign-in popups from domains it doesn't recognize.
 2. Add your GitHub Pages domain, e.g. `kaushik-bidgely.github.io`.
 
 ## 8. Test it
-Open the GitHub Pages URL, click **Sign in with Google**, use your `kaushik@bidgely.com` account. You should land on an empty board — then ask Claude to backfill your current categories/tasks (it can do this directly via a Firebase Admin script, see below), or re-create them by hand.
+Open the GitHub Pages URL, click **Sign in with Google**, use your `kaushik.battula3@gmail.com` account. You should land on an empty board — then ask Claude to backfill your current categories/tasks (it can do this directly via a Firebase Admin script, see below), or re-create them by hand.
 
 ---
 
